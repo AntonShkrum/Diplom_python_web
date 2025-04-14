@@ -72,7 +72,18 @@ def create_employers_table_if_not_exists(conn):
     conn.commit()
 
 
-
+def create_goals_table_if_not_exists(conn):
+    query = """
+    CREATE TABLE IF NOT EXISTS goals (
+        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "Data" TEXT NOT NULL,              -- формат: MM.YYYY
+        "Name" TEXT NOT NULL,              -- имя пользователя
+        "Profit" REAL NOT NULL             -- целевое значение
+    )
+    """
+    cur = conn.cursor()
+    cur.execute(query)
+    conn.commit()
 
 
 def create_roles_table_if_not_exists(conn):
