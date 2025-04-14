@@ -57,7 +57,7 @@ def create_user(username, password):
 
 login = {
     'username': {'type': 'string', 'required': True, 'empty': False, 'minlength': 2, 'maxlength': 20},
-    'password': {'type': 'string', 'required': True, 'empty': False, 'minlength': 8, 'maxlength': 20}
+    'password': {'type': 'string', 'required': True, 'empty': False, 'minlength': 3, 'maxlength': 20}
 }
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -99,7 +99,6 @@ def index():
         else:
             return jsonify({"success": False, "message": "Неверное имя пользователя или пароль"}), 401
 
-    return render_template('index.html', error=error)
 
 
 

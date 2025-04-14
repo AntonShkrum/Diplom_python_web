@@ -11,6 +11,7 @@ socketio = SocketIO(app, cors_allowed_origins=['http://localhost:5173'], ping_ti
 
 
 
+
 @app.route('/create_notification', methods=['POST'])
 def create_notification_endpoint():
     data = request.get_json()
@@ -259,7 +260,7 @@ def startup():
     if not startup_called:
         startup_called = True
         # Логика старта, например, восстановление задач из базы данных
-        restore_scheduled_tasks()
+        # restore_scheduled_tasks()
 
 
 

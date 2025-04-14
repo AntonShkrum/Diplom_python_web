@@ -30,9 +30,8 @@ def allowed_file(filename):
 
 
 
-@app.route('/scheduled_jobs', methods=['GET'])
+@app.route('/get_scheduled_jobs', methods=['GET'])
 def view_scheduled_jobs():
-    from apscheduler.triggers.date import DateTrigger
 
     current_time = datetime.now()
     current_time_formatted = current_time.strftime('%d.%m.%Y %H:%M')
