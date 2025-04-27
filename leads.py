@@ -6,24 +6,41 @@ from keys_and_tokens import *
 # Секретный API-ключ для авторизованных серверов (нужно установить в переменной окружения)
 EXTERNAL_API_KEY = os.getenv("EXTERNAL_API_KEY", "F8Jb3TMQPrHa4CucMRAvazb_UDNWpcsX9PRWT_k*")
 
-# Определение схемы валидации для входных данных
-api_antidubl_blackout_schema = {
+# Полная схема валидации для leads
+api_diktum_schema = {
+    'user_id': {'type': 'string', 'required': True},
     'sub': {'type': 'string', 'required': True},
-    'userip': {'type': 'string', 'required': True},  # Проверка IP
+    'userip': {'type': 'string', 'required': True},
     'firstname': {'type': 'string', 'required': True},
     'lastname': {'type': 'string', 'required': True},
-    'email': {'type': 'string', 'required': True, 'regex': r'^[\w\.-]+@[\w\.-]+\.\w{2,}$'},  # Валидация email
-    'phone': {'type': 'string', 'required': True, 'regex': r'^\d{10,15}$'},  # Только цифры, от 10 до 15 символов
-    'so': {'type': 'string', 'required': True},
-    'ad': {'type': 'string', 'required': True},
-    'campaign': {'type': 'string', 'required': True},
-    'lg': {'type': 'string', 'required': False},
+    'email': {'type': 'string', 'required': True, 'regex': r'^[\w\.-]+@[\w\.-]+\.\w{2,}$'},
+    'phone': {'type': 'string', 'required': True, 'regex': r'^\d{10,15}$'},
+
+    'funnel': {'type': 'string', 'required': True},          # !!! а не 'so'
+    'ad': {'type': 'string', 'required': False},
+    'campaign': {'type': 'string', 'required': False},
     'ai': {'type': 'string', 'required': False},
     'ci': {'type': 'string', 'required': False},
     'gi': {'type': 'string', 'required': False},
-    'password': {'type': 'string', 'required': False},
-    'term': {'type': 'string', 'required': False}
+    'banner_id': {'type': 'string', 'required': False},
+    'campaign_name': {'type': 'string', 'required': False},
+    'gender': {'type': 'string', 'required': False},
+    'age': {'type': 'string', 'required': False},
+    'random': {'type': 'string', 'required': False},
+    'impression_weekday': {'type': 'string', 'required': False},
+    'impression_hour': {'type': 'string', 'required': False},
+    'user_timezone': {'type': 'string', 'required': False},
+    'term': {'type': 'string', 'required': False},
+    'utm_source': {'type': 'string', 'required': False},
+    'utm_medium': {'type': 'string', 'required': False},
+    'source': {'type': 'string', 'required': False},
+    'device_type': {'type': 'string', 'required': False},
+    'position': {'type': 'string', 'required': False},
+    
+    **{f'kt_sub_id_{i}': {'type': 'string', 'required': False} for i in range(1, 11)}
 }
+
+
 
 log_request_schema = {
     'request_ip': {'type': 'string', 'regex': r'^\d{1,3}(\.\d{1,3}){3}$', 'required': False, 'nullable': True},
@@ -35,24 +52,6 @@ log_request_schema = {
 }
 
 
-
-# ✅ 1️⃣ Валидационная схема Cerberus
-leads_get_request_schema = {
-    'subid': {'type': 'string', 'required': False, 'nullable': True},
-    'userip': {'type': 'string', 'regex': r'^\d{1,3}(\.\d{1,3}){3}$', 'required': False, 'nullable': True},
-    'firstname': {'type': 'string', 'required': False, 'nullable': True},
-    'lastname': {'type': 'string', 'required': False, 'nullable': True},
-    'email': {'type': 'string', 'regex': r'^[\w\.-]+@[\w\.-]+\.\w{2,}$', 'required': False, 'nullable': True},
-    'phone': {'type': 'string', 'required': False, 'nullable': True},
-    'funnel': {'type': 'string', 'required': False, 'nullable': True},
-    'bayer': {'type': 'string', 'required': False, 'nullable': True},
-    'geo': {'type': 'string', 'required': False, 'maxlength': 3, 'nullable': True},
-    'lg': {'type': 'string', 'required': False, 'nullable': True},
-    'datatime[start]': {'type': 'string', 'regex': r'^\d{4}-\d{2}-\d{2}$', 'required': False, 'nullable': True},
-    'datatime[end]': {'type': 'string', 'regex': r'^\d{4}-\d{2}-\d{2}$', 'required': False, 'nullable': True},
-    'limit': {'type': 'integer', 'min': 1, 'max': 1000, 'required': False, 'default': 50, 'nullable': True},
-    'page': {'type': 'integer', 'min': 1, 'required': False, 'default': 1, 'nullable': True}
-}
 
 
 # Схема валидации входных данных
@@ -83,7 +82,7 @@ blacklist_filter_schema = {
 
 
 # Функция для асинхронной обработки и записи лида
-def api_antidubl_blackout_async(is_blacklisted, is_duplicate, data, request_ip):
+def api_diktum_async(is_blacklisted, is_duplicate, data, request_ip):
     try:
         # Извлекаем данные из JSON
         subid = data["sub"]
@@ -92,29 +91,46 @@ def api_antidubl_blackout_async(is_blacklisted, is_duplicate, data, request_ip):
         lastname = data["lastname"]
         email = data["email"]
         phone = data["phone"]
-        funnel = data["so"]
-        bayer = data["ad"]
+        funnel = data["funnel"]
         geo = data["campaign"]
-        lg = data.get("lg")  # Вернёт None, если ключ отсутствует
+        user_id = data["user_id"]
 
-
-
-
+        # Дополнительные поля
+        advertiser_id = data.get("ai")
+        campaign_id = data.get("ci")
+        campaign_name = data.get("campaign_name")
+        banner_id = data.get("banner_id")
+        geo_region = data.get("gi")
+        gender = data.get("gender")
+        age = data.get("age")
+        random_value = data.get("random")
+        impression_weekday = data.get("impression_weekday")
+        impression_hour = data.get("impression_hour")
+        user_timezone = data.get("user_timezone")
+        search_phrase = data.get("term")
+        utm_source = data.get("utm_source")
+        utm_medium = data.get("utm_medium")
+        source = data.get("source")
+        device_type = data.get("device_type")
+        position = data.get("position")
+        
+        # kt_sub_id_1 ... kt_sub_id_10
+        kt_sub_ids = [data.get(f"kt_sub_id_{i}") for i in range(1, 11)]
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
         with conn:  # Одна транзакция для всех операций в фоновом потоке
 
-            # Записываем лид в leads_daily (всегда)
+            # 1. Запись в leads
             cursor.execute("""
-                INSERT INTO leads_daily (subid, userip, firstname, lastname, email, phone, funnel, bayer, geo, lg, kt_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (subid, userip, firstname, lastname, email, phone, funnel, bayer, geo, lg, 'active'))
+                INSERT INTO leads (subid, userip, firstname, lastname, email, phone, funnel, geo, user_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (subid, userip, firstname, lastname, email, phone, funnel, geo, user_id, 'lead'))
 
             lead_id = cursor.lastrowid
 
-            # Если лид в блэклисте, обновляем статус и добавляем в leads_blacklist
+            # 2. Если лид в блэклисте
             if is_blacklisted:
                 cursor.execute("""
                     INSERT OR IGNORE INTO leads_blacklist (userip, email, reason, source)
@@ -122,16 +138,16 @@ def api_antidubl_blackout_async(is_blacklisted, is_duplicate, data, request_ip):
                 """, (userip, email, "Blacklisted lead", "auto"))
 
                 cursor.execute("""
-                    UPDATE leads_daily 
-                    SET kt_status = 'blocked'
+                    UPDATE leads 
+                    SET status = 'blocked'
                     WHERE id = ?
                 """, (lead_id,))
 
-            # Если лид дублируется, обновляем статус на 'duplicate' и добавляем в блэклист
-            if is_duplicate:
+            # 3. Если лид дублируется
+            elif is_duplicate:
                 cursor.execute("""
-                    UPDATE leads_daily 
-                    SET kt_status = 'duplicate'
+                    UPDATE leads 
+                    SET status = 'duplicate'
                     WHERE id = ?
                 """, (lead_id,))
 
@@ -140,7 +156,25 @@ def api_antidubl_blackout_async(is_blacklisted, is_duplicate, data, request_ip):
                     VALUES (?, ?, ?, ?)
                 """, (userip, email, "Duplicate lead", "auto"))
 
-        # Логируем результат в фоновом потоке
+            # 4. ✨ Дополнительно: Запись полного лида в leads
+            update_query = """
+                UPDATE leads
+                SET advertiser_id = ?, campaign_id = ?, campaign_name = ?, banner_id = ?, geo = ?, gender = ?, age = ?, random = ?,
+                    impression_weekday = ?, impression_hour = ?, user_timezone = ?, search_phrase = ?, utm_source = ?, utm_medium = ?,
+                    source = ?, device_type = ?, position = ?,
+                    kt_sub_id_1 = ?, kt_sub_id_2 = ?, kt_sub_id_3 = ?, kt_sub_id_4 = ?, kt_sub_id_5 = ?,
+                    kt_sub_id_6 = ?, kt_sub_id_7 = ?, kt_sub_id_8 = ?, kt_sub_id_9 = ?, kt_sub_id_10 = ?
+                WHERE subid = ?
+            """
+
+            cursor.execute(update_query, (
+                advertiser_id, campaign_id, campaign_name, banner_id, geo_region, gender, age, random_value,
+                impression_weekday, impression_hour, user_timezone, search_phrase, utm_source, utm_medium,
+                source, device_type, position,
+                *kt_sub_ids, subid  # В конце подставляем subid для WHERE
+            ))
+
+        # Логирование результата
         response_data = {
             "success": True if not is_blacklisted and not is_duplicate else False,
             "data": {
@@ -153,195 +187,203 @@ def api_antidubl_blackout_async(is_blacklisted, is_duplicate, data, request_ip):
         status_code = 201 if not is_blacklisted and not is_duplicate else 403
         leads_api_log_request(request_ip, data, response_data, status_code)
 
-        send_whatsapp_template(bayer, phone, geo, lg)
-        send_email(bayer, email, geo, lg)
+        # Отправка уведомлений
+        send_whatsapp_template(user_id, phone)
+        send_email(user_id, email)
+
     except Exception as e:
         print(f"Ошибка в фоновом потоке для лида {data.get('sub', 'unknown')}: {str(e)}")
-        # Логируем ошибку в фоновом потоке
         response_data = {"success": False, "data": {"message": "Ошибка при записи лида в фоновом потоке", "error": str(e)}}
         leads_api_log_request(request_ip, data, response_data, 500)
 
 
+
 # Ваши глобальные переменные
-API_KEY = '34A18A515E0539CEA776CA3FC9A12D3754C98A6C93796EC0E8D0C51D641FE3B8844F6622F7C1530B9CDF74C86D612008'
-SENDER_EMAIL = 'support@immediatefastx.org'
+API_KEY = 'API_KEY'
+SENDER_EMAIL = 'official@diktum.ru'
 API_ENDPOINT = 'https://api.elasticemail.com/v4/emails'
 
-# Функция отправки письма с использованием шаблона
-def send_email(bayer, email, country_code, language_code, template_id=None):
+def send_email(user_id, email, template_name=None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Проверка пользователя
-    cursor.execute("SELECT id FROM users WHERE login = ?", (bayer,))
-    user = cursor.fetchone()
+    try:
+        # Проверка пользователя
+        cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+        user = cursor.fetchone()
 
-    if not user:
-        conn.close()
-        return {"error": "Пользователь не найден в системе"}
+        if not user:
+            conn.close()
+            return {"error": "Пользователь не найден в системе"}
 
-    user_id = user["id"]
-
-    # Извлечение template_id, если не передан
-    if template_id is None:
-        cursor.execute('''
-            SELECT template_id FROM email_templates 
-            WHERE country_code = ? AND language_code = ?
-        ''', (country_code.upper(), language_code))
-        template = cursor.fetchone()
-
-        if not template:
+        # Извлечение template_name, если не передан
+        if template_name is None:
             cursor.execute('''
-                SELECT template_id FROM email_templates 
-                WHERE country_code = ? AND (language_code IS NULL OR language_code = '')
-            ''', (country_code.upper(),))
+                SELECT template_name FROM email_templates 
+                WHERE user_id = ?
+                LIMIT 1
+            ''', (user_id,))
             template = cursor.fetchone()
 
-        if template:
-            template_id = template["template_id"]
-        else:
-            conn.close()
-            return
+            if template:
+                template_name = template["template_name"]
+            else:
+                conn.close()
+                return {"error": "Шаблон для пользователя не найден"}
 
-    send_status = 'success'
-    error_message = None
-    transaction_id = None
-    message_id = None
-
-    try:
-        # Подготовка данных для API-запроса (используем TemplateName)
-        payload = {
-            "Recipients": [
-                {
-                    "Email": email,
-                    "Fields": {
-                        "name": bayer  # Персонализация для шаблона
-                    }
-                }
-            ],
-            "Content": {
-                "From": SENDER_EMAIL,
-                "TemplateName": template_id,  # Используем TemplateName
-                "ReplyTo": SENDER_EMAIL,
-                "Merge": {},  # Можно добавить персонализированные данные
-                "Options": {
-                    "TrackOpens": True,
-                    "TrackClicks": True
-                }
-            }
-        }
-
-        headers = {
-            'X-ElasticEmail-ApiKey': API_KEY,
-            'Content-Type': 'application/json'
-        }
-
-        # Отправка запроса
-        response = requests.post(API_ENDPOINT, json=payload, headers=headers)
-
-        if not response.text:
-            raise Exception("Пустой ответ от API Elastic Email")
+        send_status = 'success'
+        error_message = None
+        transaction_id = None
+        message_id = None
 
         try:
-            response_data = response.json()
-        except json.JSONDecodeError as json_error:
-            raise Exception(f"Ошибка декодирования JSON: {json_error} - Текст ответа: {response.text}")
+            # Подготовка данных для API-запроса
+            payload = {
+                "Recipients": [
+                    {
+                        "Email": email,
+                        "Fields": {
+                            "name": "User"  # Можно персонализировать имя получателя
+                        }
+                    }
+                ],
+                "Content": {
+                    "From": SENDER_EMAIL,
+                    "TemplateName": template_name,
+                    "ReplyTo": SENDER_EMAIL,
+                    "Merge": {},  # Можно добавить персонализированные данные
+                    "Options": {
+                        "TrackOpens": True,
+                        "TrackClicks": True
+                    }
+                }
+            }
 
-        if response.status_code != 200 or not response_data.get('success', True):
-            raise Exception(f"Ошибка API: {response.status_code} - {response.text}")
+            headers = {
+                'X-ElasticEmail-ApiKey': API_KEY,
+                'Content-Type': 'application/json'
+            }
 
-        # Извлечение TransactionID и MessageID
-        transaction_id = response_data.get('TransactionID')
-        message_id = response_data.get('MessageID')
+            # Отправка запроса
+            response = requests.post(API_ENDPOINT, json=payload, headers=headers)
 
-    except Exception as e:
-        send_status = 'failure'
-        error_message = str(e)
+            if not response.text:
+                raise Exception("Пустой ответ от API Elastic Email")
 
-    # Логирование в базу данных
-    cursor.execute('''
-        INSERT INTO email_api_logs (
-            user_id, recipient_email, country_code, language_code, template_id, 
-            send_status, error_message
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        user_id,
-        email,
-        country_code.upper(),
-        language_code,
-        template_id,
-        send_status,
-        error_message
-    ))
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError as json_error:
+                raise Exception(f"Ошибка декодирования JSON: {json_error} - Текст ответа: {response.text}")
 
-    conn.commit()
-    conn.close()
+            if response.status_code != 200 or not response_data.get('success', True):
+                raise Exception(f"Ошибка API: {response.status_code} - {response.text}")
 
-    if send_status == 'failure':
-        return {"error": "Ошибка отправки письма: " + error_message}
+            # Извлечение TransactionID и MessageID
+            transaction_id = response_data.get('TransactionID')
+            message_id = response_data.get('MessageID')
 
-    return {
-        "success": True,
-        "user_id": user_id,
-        "template_id": template_id,
-        "transaction_id": transaction_id,
-        "message_id": message_id
-    }
+        except Exception as e:
+            send_status = 'failure'
+            error_message = str(e)
+
+        # Логирование в email_api_logs
+        cursor.execute('''
+            INSERT INTO email_api_logs (
+                user_id, recipient_email, template_name, send_status, error_message
+            ) VALUES (?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            email,
+            template_name,
+            send_status,
+            error_message
+        ))
+
+        conn.commit()
+
+        if send_status == 'failure':
+            return {"error": "Ошибка отправки письма: " + error_message}
+
+        return {
+            "success": True,
+            "user_id": user_id,
+            "template_name": template_name,
+            "transaction_id": transaction_id,
+            "message_id": message_id
+        }
+
+    finally:
+        conn.close()
 
 
-@app.route('/api_antidubl_email_set_body', methods=['POST'])
-def save_user():
+@app.route('/api_diktum_email_set_body', methods=['POST'])
+def save_email_template():
     # Получаем токен авторизации
     token = request.headers.get('Authorization')
     if not token:
         return jsonify({"error": "Отсутствует токен авторизации"}), 401
 
     try:
-        token = token.split(' ')[-1]  # Извлекаем токен из заголовка
-        payload = verify_jwt(token)  # Проверяем токен
-        user_id = payload['user_id']  # Получаем user_id из токена
+        token = token.split(' ')[-1]
+        payload = verify_jwt(token)
+        user_id = payload['user_id']
     except Exception:
         return jsonify({"error": "Недействительный или истекший токен"}), 401
 
-    
     data = request.get_json()
 
-    if not data or 'country_code' not in data or 'language_code' not in data or 'template_id' not in data:
-        return jsonify({"error": "Отсутствуют необходимые поля (country_code, language_code, template_id)"}), 400
+    if not data or 'template_name' not in data:
+        return jsonify({"error": "Отсутствует необходимое поле (template_name)"}), 400
 
-    country_code = data['country_code']
-    language_code = data['language_code']
-    template_id = data['template_id']
+    template_name = data['template_name']
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Вставка или обновление записи
+        # Проверка: есть ли уже запись для этого user_id
         cursor.execute('''
-            INSERT INTO email_templates (country_code, language_code, template_id, subject, body, user_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(country_code, language_code) 
-            DO UPDATE SET template_id = excluded.template_id AND subject = excluded.subject
-        ''', (country_code, language_code, template_id, '', '', user_id))
+            SELECT id FROM email_templates WHERE user_id = ?
+        ''', (user_id,))
+        existing = cursor.fetchone()
+
+        if existing:
+            # Если запись есть — обновляем template_name
+            cursor.execute('''
+                UPDATE email_templates
+                SET template_name = ?
+                WHERE user_id = ?
+            ''', (template_name, user_id))
+        else:
+            # Если записи нет — создаём новую
+            cursor.execute('''
+                INSERT INTO email_templates (user_id, template_name)
+                VALUES (?, ?)
+            ''', (user_id, template_name))
 
         conn.commit()
 
+        return jsonify({"success": True, "message": "Шаблон успешно сохранён"}), 201
 
-        return jsonify({"success": True, "message": "Данные успешно сохранены"}), 201
     except sqlite3.Error as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Ошибка базы данных: {str(e)}"}), 500
     finally:
         conn.close()
 
 
-@app.route('/api_antidubl_email_get_body', methods=['GET'])
+@app.route('/api_diktum_email_get_body', methods=['GET'])
 def get_email_template():
-    # send_email('ferz', 'andreroy718@gmail.com', 'JP', '')
-    # Получаем параметры запроса
-    country_code = request.args.get('country_code')
-    if not country_code:
-        return jsonify({"error": "Отсутствует необходимый параметр (country_code)"}), 400
+    # Получаем токен авторизации
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({"error": "Отсутствует токен авторизации"}), 401
+
+    try:
+        token = token.split(' ')[-1]
+        payload = verify_jwt(token)
+        user_id = payload['user_id']
+    except Exception:
+        return jsonify({"error": "Недействительный или истекший токен"}), 401
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -349,28 +391,23 @@ def get_email_template():
     try:
         cursor.execute('''
             SELECT * FROM email_templates 
-            WHERE country_code = ?
-        ''', (country_code.upper(),))
+            WHERE user_id = ?
+        ''', (user_id,))
 
-        templates = cursor.fetchall()
+        template = cursor.fetchone()
 
-        if not templates:
-            return jsonify({"error": "Шаблоны не найдены"}), 404
+        if not template:
+            return jsonify({"error": "Шаблон для пользователя не найден"}), 404
 
-        # Формируем список записей
-        templates_list = []
-        for template in templates:
-            templates_list.append({
-                "id": template["id"],
-                "user_id": template["user_id"],
-                "country_code": template["country_code"],
-                "language_code": template["language_code"],
-                "template_id": template["template_id"]
-            })
+        template_data = {
+            "id": template["id"],
+            "user_id": template["user_id"],
+            "template_name": template["template_name"]
+        }
 
         return jsonify({
             "success": True,
-            "templates": templates_list
+            "template": template_data
         }), 200
 
     except sqlite3.Error as e:
@@ -379,27 +416,38 @@ def get_email_template():
         conn.close()
 
 
-@app.route('/api_antidubl_email_delete_body/<int:template_id>', methods=['DELETE'])
+
+@app.route('/api_diktum_email_delete_body/<int:template_id>', methods=['DELETE'])
 def delete_email_template(template_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        cursor.execute('SELECT * FROM email_templates WHERE id = ?', (template_id,))
+        # Проверяем наличие шаблона
+        cursor.execute('SELECT id FROM email_templates WHERE id = ?', (template_id,))
         template = cursor.fetchone()
 
         if not template:
             return jsonify({"error": "Шаблон не найден"}), 404
 
+        # Удаляем шаблон
         cursor.execute('DELETE FROM email_templates WHERE id = ?', (template_id,))
         conn.commit()
 
-        return jsonify({"success": True, "message": f"Шаблон с id {template_id} успешно удален"}), 200
+        return jsonify({
+            "success": True,
+            "message": f"Шаблон с id {template_id} успешно удалён"
+        }), 200
 
     except sqlite3.Error as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": f"Ошибка базы данных: {str(e)}"
+        }), 500
+
     finally:
         conn.close()
+
 
 
 
@@ -409,343 +457,240 @@ ACCESS_TOKEN = "EAAI2aZAueMfUBOwFOwYbqpqtpciatdotBBuO6ZBIIFhJVvCItQrLe4316o18SWo
 
 
 
-
-def send_whatsapp_template(bayer: str, to_number: str, country_code: str, preferred_language: str) -> dict:
-    """
-    Отправляет шаблонное сообщение через WhatsApp Business API, используя данные из базы.
-
-    Args:
-        bayer (str): Логин пользователя.
-        to_number (str): Номер получателя в формате E.164 (например, "+5514982190556").
-        country_code (str): Двухбуквенный код страны (например, "PL").
-        preferred_language (str): Предпочитаемый код языка (например, "pl_PL").
-
-    Returns:
-        dict: Словарь с результатом (success, data или error).
-    """
+def send_whatsapp_template(user_id, phone):
     try:
-        if not to_number.startswith("+"):
-            to_number = f"+{to_number}"
+        # Приведение номера к международному формату
+        if not phone.startswith("+"):
+            phone = f"+{phone}"
 
-        # Получаем данные шаблона из базы
-        template_info = get_template_info(bayer, country_code, preferred_language)
-        if "error" in template_info:
-            return
-        
-        # Формируем тело запроса
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Получаем шаблон WhatsApp для пользователя
+        cursor.execute("""
+            SELECT template_name FROM whatsapp_templates
+            WHERE user_id = ?
+            LIMIT 1
+        """, (user_id,))
+        template_row = cursor.fetchone()
+        conn.close()
+
+        if not template_row:
+            return {"success": False, "error": "Шаблон WhatsApp для пользователя не найден"}
+
+        template_name = template_row["template_name"]
+
+        # Формируем payload запроса к API
         payload = {
             "messaging_product": "whatsapp",
-            "to": to_number,
+            "to": phone,
             "type": "template",
             "template": {
-                "name": template_info["template_name"],
+                "name": template_name,
                 "language": {
-                    "code": template_info["language_code"]
+                    "code": "en_US"  # Можно доработать, если нужно динамически
                 }
             }
         }
 
-        if template_info["components"]:
-            payload["template"]["components"] = template_info["components"]
-
-        # Заголовки для запроса
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {ACCESS_TOKEN}'
         }
 
-        # Отправляем POST-запрос к WhatsApp API
+        # Отправляем POST-запрос в WhatsApp API
         response = requests.post(
-            f'https://graph.facebook.com/v22.0/{WHATSAPP_BUSINESS_PHONE_NUMBER_ID}/messages',
+            f'https://graph.facebook.com/v17.0/{WHATSAPP_BUSINESS_PHONE_NUMBER_ID}/messages',
             json=payload,
             headers=headers
         )
 
-        # Логируем запрос и ответ
-        request_payload_str = str(payload)
-        response_payload_str = response.text
+        # Логируем отправку
         conn = get_db_connection()
         with conn:
             conn.execute("""
-                INSERT INTO WhatsAppApiLogs (request_payload, response_payload)
+                INSERT INTO wa_api_logs (request_payload, response_payload)
                 VALUES (?, ?)
-            """, (request_payload_str, response_payload_str))
+            """, (json.dumps(payload), response.text))
         conn.close()
+
+        if response.status_code != 200:
+            return {"success": False, "error": response.text}
 
         return {"success": True, "data": response.json()}
 
-    except Exception as e:
-        request_payload_str = str(payload) if 'payload' in locals() else "Не удалось сформировать payload"
-        response_payload_str = str(e)
-        conn = get_db_connection()
-        with conn:
-            conn.execute("""
-                INSERT INTO WhatsAppApiLogs (request_payload, response_payload)
-                VALUES (?, ?)
-            """, (request_payload_str, response_payload_str))
-        conn.close()
-        return {"success": False, "error": str(e)}
 
     except Exception as e:
-        request_payload_str = str(payload) if 'payload' in locals() else "Не удалось сформировать payload"
-        response_payload_str = str(e)
         conn = get_db_connection()
         with conn:
             conn.execute("""
-                INSERT INTO WhatsAppApiLogs (request_payload, response_payload)
+                INSERT INTO wa_api_logs (request_payload, response_payload)
                 VALUES (?, ?)
-            """, (request_payload_str, response_payload_str))
+            """, (str(payload) if 'payload' in locals() else "Ошибка формирования payload", str(e)))
         conn.close()
         return {"success": False, "error": str(e)}
 
 
 
 
-# Эндпоинт для получения всех шаблонов пользователя
-@app.route('/api_antidubl_wa_get_all_templates', methods=['GET'])
+@app.route('/api_diktum_wa_get_templates', methods=['GET'])
 def get_all_templates_endpoint():
     """
     Эндпоинт для получения всех шаблонов WhatsApp для пользователя.
     Параметры запроса:
-        - bayer (str): Логин пользователя (обязательный).
-
-    Пример запроса:
-        GET /api_antidubl_wa_get_all_templates?bayer=ferz
+        - user_id (int): ID пользователя (обязательный).
     """
     try:
-        bayer = request.args.get('bayer')
+        # Получаем токен авторизации
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({"error": "Отсутствует токен авторизации"}), 401
 
-        # Проверяем наличие обязательного параметра
-        if not bayer:
-            return jsonify({"error": "Обязательный параметр: 'bayer'"}), 400
-
-        # Логика получения всех шаблонов
-        conn = get_db_connection()
-        with conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM users WHERE login = ?", (bayer,))
-            user = cursor.fetchone()
-
-            if not user:
-                return jsonify({"error": "Пользователь не найден в системе"}), 404
-
-            user_id = user["id"]
-
-            # Получаем все шаблоны для пользователя
-            templates = conn.execute(
-                "SELECT country_code, preferred_language_code, language_code, template_name, components FROM whatsapp_templates WHERE user_id = ?",
-                (user_id,)
-            ).fetchall()
-
-            # Форматируем результат в список словарей
-            result = []
-            for template in templates:
-                template_dict = {
-                    "country_code": template["country_code"],
-                    "language_code": template["language_code"],
-                    "template_name": template["template_name"],
-                    "preferred_language_code": template["preferred_language_code"],
-                    "components": json.loads(template["components"]) if template["components"] else None
-                }
-                result.append(template_dict)
-
-        return jsonify({"templates": result}), 200
-
-    except Exception as e:
-        return jsonify({"error": f"Ошибка: {str(e)}"}), 500
-
-
-
-
-# Эндпоинт для настройки шаблона
-@app.route('/api_antidubl_wa_set_template', methods=['POST'])
-def set_template_endpoint():
-    """
-    Эндпоинт для настройки шаблона WhatsApp.
-    Ожидаемый JSON:
-    {
-        "bayer": "user_login",
-        "country_code": "PL" (опционально),
-        "language_code": "pl_PL" (опционально),
-        "template_name": "hello_pl",
-        "components": [{"type": "body", "parameters": [{"type": "text", "text": "Jan"}]}] (опционально)
-    }
-    """
-    try:
-        data = request.get_json()
-        if not data or "bayer" not in data or "template_name" not in data:
-            return jsonify({"error": "Обязательные поля: 'bayer' и 'template_name'"}), 400
-
-        bayer = data["bayer"]
-        country_code = data.get("country_code")
-        language_code = data.get("language_code")
-        preferred_language_code = data.get("preferred_language_code")
-        template_name = data["template_name"]
-        components = data.get("components")
+        try:
+            token = token.split(' ')[-1]
+            payload = verify_jwt(token)
+            user_id = payload['user_id']
+        except Exception:
+            return jsonify({"error": "Недействительный или истекший токен"}), 401
 
         conn = get_db_connection()
-        with conn:
-            # Проверяем, существует ли пользователь
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM users WHERE login = ?", (bayer,))
-            user = cursor.fetchone()
-            if not user:
-                # Если пользователя нет, создаем его
-                cursor.execute("INSERT INTO users (login) VALUES (?)", (bayer,))
-                user_id = cursor.lastrowid
-            else:
-                user_id = user["id"]
-
-            # Проверяем, существует ли запись для данной комбинации
-            existing = conn.execute(
-                "SELECT id FROM whatsapp_templates WHERE user_id = ? AND country_code IS ? AND language_code IS ? AND preferred_language_code IS ?",
-                (user_id, country_code.upper() if country_code else None, language_code, preferred_language_code)
-            ).fetchone()
-
-            components_json = json.dumps(components) if components else None
-            if existing:
-                # Обновляем существующую запись
-                conn.execute(
-                    "UPDATE whatsapp_templates SET template_name = ?, components = ? WHERE user_id = ? AND country_code IS ? AND language_code IS ? AND preferred_language_code IS ?",
-                    (template_name, components_json, user_id, country_code.upper() if country_code else None, language_code, preferred_language_code)
-                )
-            else:
-                # Добавляем новую запись
-                conn.execute(
-                    "INSERT INTO whatsapp_templates (user_id, country_code, language_code, preferred_language_code, template_name, components) VALUES (?, ?, ?, ?, ?, ?)",
-                    (user_id, country_code.upper() if country_code else None, language_code, preferred_language_code, template_name, components_json)
-                )
-        conn.close()
-        return jsonify({"status": "success", "message": "Шаблон успешно установлен"}), 200
-
-    except Exception as e:
-        return jsonify({"error": f"Ошибка: {str(e)}"}), 500
-
-
-# Функция получения шаблона из базы данных
-def get_template_info(bayer: str, country_code: str, preferred_language: str = None) -> dict:
-    conn = get_db_connection()
-    with conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE login = ?", (bayer,))
+
+        # Проверяем, существует ли пользователь
+        cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
         user = cursor.fetchone()
 
         if not user:
-            return {"error": "Пользователь не найден в системе"}
+            return jsonify({"error": "Пользователь с таким user_id не найден"}), 404
 
-        user_id = user["id"]
+        # Получаем все шаблоны WhatsApp для пользователя
+        cursor.execute("""
+            SELECT id, template_name
+            FROM whatsapp_templates
+            WHERE user_id = ?
+        """, (user_id,))
 
-        # 1. Если preferred_language указан, проверяем комбинацию страна + язык
-        if preferred_language:
-            template = conn.execute(
-                "SELECT template_name, language_code, components FROM whatsapp_templates WHERE country_code = ? AND preferred_language_code = ? AND user_id = ?",
-                (country_code.upper(), preferred_language, user_id)
-            ).fetchone()
-            
-            if template:
-                return {
-                    "template_name": template["template_name"],
-                    "language_code": template["language_code"],
-                    "components": json.loads(template["components"]) if template["components"] else None
-                }
-        
-        # 2. Если preferred_language None или комбинация не найдена, проверяем только страну
-        template = conn.execute(
-            "SELECT template_name, language_code, components FROM whatsapp_templates WHERE country_code = ? AND user_id = ?",
-            (country_code.upper(), user_id)
-        ).fetchone()
-        
-        if template:
-            return {
-                "template_name": template["template_name"],
-                "language_code": template["language_code"],
-                "components": json.loads(template["components"]) if template["components"] else None
+        templates = cursor.fetchall()
+
+        conn.close()
+
+        # Формируем список результатов
+        result = [
+            {
+                "id": template["id"],
+                "template_name": template["template_name"]
             }
-        
-        # 3. Если ничего не найдено, возвращаем ошибку
-        return {"error": "Шаблон не найден"}
+            for template in templates
+        ]
 
-
-
-
-
-
-# Эндпоинт для вызова get_template_info
-@app.route('/api_antidubl_wa_get_template', methods=['GET'])
-def get_template_endpoint():
-    """
-    Эндпоинт для получения информации о шаблоне WhatsApp.
-    Параметры запроса:
-        - bayer (str): Логин пользователя (обязательный).
-        - country_code (str): Двухбуквенный код страны (обязательный).
-        - preferred_language (str): Предпочитаемый код языка (обязательный).
-
-    Пример запроса:
-        GET /api_antidubl_wa_get_template?bayer=ferz&country_code=PL&preferred_language=pl_PL
-    """
-    try:
-        bayer = request.args.get('bayer')
-        country_code = request.args.get('country_code')
-        preferred_language = request.args.get('preferred_language')  # Исправлено на 'preferred_language'
-
-        # Проверяем наличие обязательных параметров
-        if not bayer or not country_code:
-            return jsonify({"error": "Обязательные параметры: 'bayer', 'country_code'"}), 400
-
-        # Вызываем функцию и возвращаем результат
-        result = get_template_info(bayer, country_code, preferred_language)
-        return jsonify(result), 200
+        return jsonify({
+            "success": True,
+            "templates": result
+        }), 200
 
     except Exception as e:
         return jsonify({"error": f"Ошибка: {str(e)}"}), 500
 
 
 
-# Эндпоинт для удаления шаблона по template_name
-@app.route('/api_antidubl_wa_delete_template', methods=['DELETE'])
-def delete_template_endpoint():
+@app.route('/api_diktum_wa_set_template', methods=['POST'])
+def set_template_endpoint():
     """
-    Эндпоинт для удаления записей из whatsapp_templates по template_name для конкретного пользователя.
-    Параметры запроса:
-        - bayer (str): Логин пользователя (обязательный).
-        - template_name (str): Название шаблона для удаления (обязательный).
-
-    Пример запроса:
-        DELETE /api_antidubl_wa_delete_template?bayer=ferz&template_name=hello_pl
+    Эндпоинт для создания или обновления шаблона WhatsApp для авторизованного пользователя.
+    Ожидаемый JSON:
+    {
+        "template_name": "welcome_template"
+    }
     """
     try:
-        bayer = request.args.get('bayer')
-        template_name = request.args.get('template_name')
+        # Получаем токен авторизации
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({"error": "Отсутствует токен авторизации"}), 401
 
-        # Проверяем наличие обязательных параметров
-        if not bayer or not template_name:
-            return jsonify({"error": "Обязательные параметры: 'bayer', 'template_name'"}), 400
+        try:
+            token = token.split(' ')[-1]
+            payload = verify_jwt(token)
+            user_id = payload['user_id']
+        except Exception:
+            return jsonify({"error": "Недействительный или истекший токен"}), 401
+
+        # Получаем тело запроса
+        data = request.get_json()
+        if not data or "template_name" not in data:
+            return jsonify({"error": "Обязательное поле: 'template_name'"}), 400
+
+        template_name = data["template_name"]
 
         conn = get_db_connection()
-        with conn:
-            cursor = conn.cursor()
-            # Проверяем существование пользователя
-            cursor.execute("SELECT id FROM users WHERE login = ?", (bayer,))
-            user = cursor.fetchone()
+        cursor = conn.cursor()
 
-            if not user:
-                return jsonify({"error": "Пользователь не найден в системе"}), 404
+        # Проверяем, есть ли уже шаблон для пользователя
+        cursor.execute("SELECT id FROM whatsapp_templates WHERE user_id = ?", (user_id,))
+        existing = cursor.fetchone()
 
-            user_id = user["id"]
-
-            # Удаляем все записи с указанным template_name для данного пользователя
+        if existing:
+            # Обновляем существующий шаблон
             cursor.execute(
-                "DELETE FROM whatsapp_templates WHERE user_id = ? AND template_name = ?",
+                "UPDATE whatsapp_templates SET template_name = ? WHERE user_id = ?",
+                (template_name, user_id)
+            )
+        else:
+            # Создаём новый шаблон
+            cursor.execute(
+                "INSERT INTO whatsapp_templates (user_id, template_name) VALUES (?, ?)",
                 (user_id, template_name)
             )
-            deleted_rows = cursor.rowcount  # Количество удаленных строк
 
-            if deleted_rows == 0:
-                return jsonify({"error": "Шаблон с таким именем не найден для данного пользователя"}), 404
+        conn.commit()
+        conn.close()
 
-            conn.commit()
+        return jsonify({"success": True, "message": "Шаблон успешно сохранён"}), 200
 
-        return jsonify({"status": "success", "message": f"Удалено {deleted_rows} записей с template_name='{template_name}'"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Ошибка: {str(e)}"}), 500
+
+@app.route('/api_diktum_wa_delete_template/<int:template_id>', methods=['DELETE'])
+def delete_template_endpoint(template_id):
+    """
+    Эндпоинт для удаления шаблона WhatsApp по его ID для авторизованного пользователя.
+    
+    Пример запроса:
+        DELETE /api_diktum_wa_delete_template/5
+    """
+    try:
+        # Проверка токена авторизации
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({"error": "Отсутствует токен авторизации"}), 401
+
+        try:
+            token = token.split(' ')[-1]
+            payload = verify_jwt(token)
+            user_id = payload['user_id']
+        except Exception:
+            return jsonify({"error": "Недействительный или истекший токен"}), 401
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Удаляем запись только если она принадлежит этому пользователю
+        cursor.execute(
+            "DELETE FROM whatsapp_templates WHERE user_id = ? AND id = ?",
+            (user_id, template_id)
+        )
+        deleted_rows = cursor.rowcount
+
+        conn.commit()
+        conn.close()
+
+        if deleted_rows == 0:
+            return jsonify({"error": "Шаблон с таким ID не найден для данного пользователя"}), 404
+
+        return jsonify({
+            "success": True,
+            "message": f"Удалено {deleted_rows} записей с template_id={template_id}"
+        }), 200
 
     except Exception as e:
         return jsonify({"error": f"Ошибка: {str(e)}"}), 500
@@ -755,8 +700,9 @@ def delete_template_endpoint():
 
 
 
-@app.route('/api_antidubl_blackout', methods=['POST'])
-def api_antidubl_blackout():
+
+@app.route('/api_diktum', methods=['POST'])
+def api_diktum():
     """
     API для записи лидов. Проверяет лид синхронно, а запись и обработку выполняет асинхронно в отдельном потоке.
     """
@@ -776,7 +722,7 @@ def api_antidubl_blackout():
     # Получение данных из запроса
     data = request.get_json()
 
-    v = Validator(api_antidubl_blackout_schema)
+    v = Validator(api_diktum_schema)
     if not v.validate(data):
         response_data = {"success": False, "data": {"message": "Ошибка валидации", "details": v.errors}}
         return jsonify(response_data), 400
@@ -790,14 +736,14 @@ def api_antidubl_blackout():
         cursor.execute("""
             SELECT 
                 EXISTS(SELECT 1 FROM leads_blacklist WHERE userip = ? OR email = ?) AS is_blacklisted,
-                EXISTS(SELECT 1 FROM leads_daily WHERE userip = ? OR email = ?) AS is_duplicate
+                EXISTS(SELECT 1 FROM leads WHERE userip = ? OR email = ?) AS is_duplicate
         """, (data["userip"], data["email"], data["userip"], data["email"]))
         is_blacklisted, is_duplicate = cursor.fetchone()
     conn.close()
 
     
     # Запускаем запись лида в фоновом потоке
-    threading.Thread(target=api_antidubl_blackout_async, args=(is_blacklisted, is_duplicate, data, request_ip), daemon=True).start()
+    threading.Thread(target=api_diktum_async, args=(is_blacklisted, is_duplicate, data, request_ip), daemon=True).start()
 
 
     # Быстрый ответ клиенту на основе проверки
@@ -819,7 +765,88 @@ def api_antidubl_blackout():
 
 
 
+@app.route('/api_diktum_update_lead_status', methods=['PATCH'])
+def api_diktum_update_lead_status():
+    """
+    Эндпоинт для изменения статуса лида на 'sale' и установки distributor_payout.
+    Доступ разрешен только администраторам.
+    
+    Ожидаемый JSON:
+    {
+        "lead_id": 123,
+        "distributor_payout": 50
+    }
+    """
+    try:
+        # Проверка токена авторизации
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({"success": False, "message": "Отсутствует токен авторизации"}), 401
 
+        try:
+            token = token.split(' ')[-1]
+            payload = verify_jwt(token)
+            user_id = payload['user_id']
+            role = payload.get('role')
+        except Exception:
+            return jsonify({"success": False, "message": "Недействительный или истекший токен"}), 401
+
+        # Проверяем роль пользователя
+        if role != 'admin':
+            return jsonify({"success": False, "message": "Доступ запрещён. Только администраторы могут редактировать лиды."}), 403
+
+        # Получаем тело запроса
+        data = request.get_json()
+        lead_id = data.get('lead_id')
+        distributor_payout = data.get('distributor_payout')
+
+        if not lead_id or distributor_payout is None:
+            return jsonify({
+                "success": False,
+                "message": "Поля 'lead_id' и 'distributor_payout' обязательны"
+            }), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Проверяем, существует ли лид со статусом "lead"
+        cursor.execute(
+            "SELECT id, status FROM leads WHERE id = ?",
+            (lead_id,)
+        )
+        lead = cursor.fetchone()
+
+        if not lead:
+            conn.close()
+            return jsonify({"success": False, "message": "Лид не найден"}), 404
+
+        if lead["status"] != "lead":
+            conn.close()
+            return jsonify({"success": False, "message": "Статус можно изменить только у лида со статусом 'lead'"}), 400
+
+        # Обновляем статус на "sale" и выставляем distributor_payout
+        cursor.execute(
+            """
+            UPDATE leads
+            SET status = 'sale', distributor_payout = ?
+            WHERE id = ?
+            """,
+            (distributor_payout, lead_id)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"Статус лида {lead_id} успешно изменён на 'sale', выплата дистрибьютору установлена."
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Ошибка при обновлении лида: {str(e)}"
+        }), 500
 
 
 def leads_api_log_request(request_ip, request_data, response_data, status_code):
@@ -846,8 +873,8 @@ def leads_api_log_request(request_ip, request_data, response_data, status_code):
 
 
 
-@app.route('/api_antidubl_logs', methods=['GET'])
-def api_antidubl_logs():
+@app.route('/api_diktum_logs', methods=['GET'])
+def api_diktum_logs():
     """
     Ручка для получения логов запросов с возможностью фильтрации и пагинации.
     """
@@ -976,127 +1003,74 @@ def api_antidubl_logs():
 
 
 
-@app.route('/api_antidubl_get_leads', methods=['GET'])
-def api_antidubl_get_leads():
+@app.route('/api_diktum_get_leads', methods=['GET'])
+def api_diktum_get_leads():
     """
     API для получения лидов с фильтрацией и пагинацией.
-    Теперь работает корректная фильтрация по всем параметрам.
+    Работает корректная фильтрация только по актуальным полям таблицы leads.
     """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # ✅ 1️⃣ Получаем токен авторизации
+        # 1. Проверка токена
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({"success": False, "data": {"message": "Отсутствует токен авторизации"}}), 401
 
         try:
             token = token.split(' ')[-1]
-            payload = verify_jwt(token)  # Функция проверки токена
+            payload = verify_jwt(token)
             user_id = int(payload.get('user_id'))
             user_role = payload.get('role')
-            username = payload['username']
-            
+            username = payload.get('username')
         except (KeyError, ValueError, TypeError):
             return jsonify({"success": False, "data": {"message": "Недействительный или истекший токен"}}), 401
 
         is_admin = user_role == 'admin'
 
-        # ✅ 2️⃣ Получаем список столбцов таблицы
-        cursor.execute("PRAGMA table_info(leads_daily)")
+        # 2. Получение всех колонок из таблицы leads
+        cursor.execute("PRAGMA table_info(leads)")
         columns_info = cursor.fetchall()
-        all_columns = [row[1] for row in columns_info]  # row[1] - название столбца
+        all_columns = [row[1] for row in columns_info]
 
-
-
-        # Определение фильтруемых колонок (включая новые из таблицы leads_daily)
+        # 3. Фильтрация только по реально существующим полям
         filterable_columns = [
             "id", "subid", "userip", "firstname", "lastname", "email", "phone",
-            "funnel", "bayer", "geo", "lg", "kt_campaign_name", "kt_campaign_group",
-            "kt_landing_group", "kt_offer_group", "kt_landing_name", "kt_offer_name",
-            "kt_ffiliate_network", "kt_source_pixel", "kt_stream", "kt_global_source",
-            "kt_referrer", "kt_keyword", "kt_click_id", "kt_visitor_code", "kt_campaign_id",
-            "kt_campaign_group_id", "kt_offer_group_id", "kt_landing_group_id", "kt_landing_id",
-            "kt_offer_id", "kt_affiliate_network", "kt_affiliate_network_id", "kt_source_pixel_id",
-            "kt_stream_id", "kt_fb_ad_campaign_name", "kt_external_id", "kt_creative_id",
-            "kt_connection_type", "kt_operator", "kt_isp", "kt_country", "kt_region",
-            "kt_city", "kt_language", "kt_device_type", "kt_user_agent", "kt_os",
-            "kt_os_version", "kt_browser", "kt_browser_version", "kt_device_model",
-            "kt_ip", "kt_postback_datetime", "kt_click_datetime", "kt_status",
-            "kt_previous_status", "kt_original_status",
-            "kt_sale_period", "kt_profitability", "kt_revenue", "sale_status", "kt_profit"
-        ]
+            "funnel", "geo", "advertiser_id", "campaign_id", "campaign_name",
+            "banner_id", "gender", "age", "random", "impression_weekday",
+            "impression_hour", "user_timezone", "search_phrase", "utm_source",
+            "utm_medium", "source", "device_type", "position", "status",
+            "distributor_payout"  # <== ДОБАВИЛИ!
+        ] + [f"kt_sub_id_{i}" for i in range(1, 11)]
 
-        # Добавляем sub_id_1 ... sub_id_30 в фильтруемые колонки
-        for i in range(1, 31):
-            filterable_columns.append(f"kt_sub_id_{i}")
 
+        # 4. Получение параметров запроса
         request_params = {col: request.args.get(col) for col in filterable_columns}
         request_params["datatime[start]"] = request.args.get("datatime[start]")
         request_params["datatime[end]"] = request.args.get("datatime[end]")
         request_params["limit"] = request.args.get("limit", type=int, default=50)
         request_params["page"] = request.args.get("page", type=int, default=1)
 
-        v = Validator(leads_get_request_schema, purge_unknown=True)
+        # 5. Валидатор (если хочешь, можно сюда подключить Cerberus-схему)
+        validated_data = request_params
 
-        if not v.validate(request_params):
-            return jsonify({"success": False, "data": {"message": "Ошибка валидации", "errors": v.errors}}), 400
-
-        validated_data = v.document
-        
-        # ✅ 4️⃣ Обработка дат
         start_date, end_date = validated_data["datatime[start]"], validated_data["datatime[end]"]
 
+        if start_date:
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y-%m-%d 00:00:00")
+        if end_date:
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y-%m-%d 23:59:59")
 
-        # Выполнение функции для получения данных лога
-    
-
-        try:
-            if start_date:
-                start_date = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y-%m-%d 00:00:00")
-            if end_date:
-                end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y-%m-%d 23:59:59")
-        except ValueError:
-            return jsonify({"success": False, "data": {"message": "Некорректный формат даты"}}), 400
-        
-
-
-        # try:
-        #     fetch_conversions_log(start_date, end_date, conn)
-        # except requests.exceptions.RequestException as e:
-        #     # Обрабатываем ошибки, связанные с запросом
-        #     return jsonify({
-        #         "success": False,
-        #         "data": {
-        #             "message": f"Ошибка при выполнении запроса: {str(e)}"
-        #         }
-        #     }), 500
-        # except Exception as e:
-        #     # Обрабатываем все другие ошибки
-        #     return jsonify({
-        #         "success": False,
-        #         "data": {
-        #             "message": f"Произошла ошибка: {str(e)}"
-        #         }
-        #     }), 500
-
-
-
-
-        # ✅ 5️⃣ Формируем SQL-запрос
-        query = f"SELECT {', '.join(all_columns)} FROM leads_daily"
+        # 6. Формирование SQL-запроса
+        query = f"SELECT {', '.join(all_columns)} FROM leads"
         params = []
         where_clauses = []
 
-        # Предположим, что у вас есть переменная username, с которой нужно сравнивать
-        x_trackbox_username = username  # username — это переменная, с которой нужно сравнивать
-
         if not is_admin:
-            where_clauses.append("bayer = ?")
-            params.append(x_trackbox_username)
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
 
-        # Фильтрация по колонкам
         for column, value in request_params.items():
             if value and column in filterable_columns:
                 where_clauses.append(f"{column} = ?")
@@ -1112,18 +1086,17 @@ def api_antidubl_get_leads():
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
 
-        query += " ORDER BY id DESC, datatime DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY id DESC LIMIT ? OFFSET ?"
         params.extend([validated_data["limit"], (validated_data["page"] - 1) * validated_data["limit"]])
 
         cursor.execute(query, params)
         leads = cursor.fetchall()
 
-        # ✅ 6️⃣ Преобразуем результат в JSON
         leads_list = [dict(zip(all_columns, lead)) for lead in leads]
 
-        # ✅ 7️⃣ Подсчет общего количества записей
-        count_query = "SELECT COUNT(*) FROM leads_daily"
-        count_params = params[:-2]  # Исключаем limit и offset
+        # Подсчёт общего количества
+        count_query = "SELECT COUNT(*) FROM leads"
+        count_params = params[:-2]  # без limit и offset
         if where_clauses:
             count_query += " WHERE " + " AND ".join(where_clauses)
 
@@ -1153,21 +1126,20 @@ def api_antidubl_get_leads():
 
 
 
-
-@app.route('/api_antidubl_get_general_statistics', methods=['GET'])
-def api_antidubl_get_general_statistics():
+@app.route('/api_diktum_get_general_statistics', methods=['GET'])
+def api_diktum_get_general_statistics():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # ✅ Получаем токен авторизации
+        # 1. Авторизация
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({"success": False, "data": {"message": "Отсутствует токен авторизации"}}), 401
 
         try:
             token = token.split(' ')[-1]
-            payload = verify_jwt(token)  # Функция проверки токена
+            payload = verify_jwt(token)
             user_id = int(payload.get('user_id'))
             user_role = payload.get('role')
         except (KeyError, ValueError, TypeError):
@@ -1175,61 +1147,51 @@ def api_antidubl_get_general_statistics():
 
         is_admin = user_role == 'admin'
 
-        # ✅ Получаем настройки API для пользователя
-        cursor.execute("SELECT x_trackbox_username FROM user_api_settings WHERE user_id = ?", (user_id,))
-        api_settings_row = cursor.fetchone()
-        x_trackbox_username = api_settings_row[0] if api_settings_row else None
-        if not x_trackbox_username and not is_admin:
-            return jsonify({"success": False, "data": {"message": "Настройки API для пользователя не найдены"}}), 404
-
-        # ✅ Функция для выполнения запроса для получения самых популярных значений для указанного поля
-        def get_popular_field_value(field_name, bayer=None):
+        # 2. Получаем функцию подсчёта популярных значений
+        def get_popular_field_value(field_name, user_id_filter=None):
             query = f"""
-                SELECT {field_name}, COUNT({field_name}) AS {field_name}_count
-                FROM leads_daily
-                WHERE {field_name} IS NOT NULL AND {field_name} != '' 
-                AND DATE(datatime) = DATE('now')  -- Используем DATE('now') для SQLite
+                SELECT {field_name}, COUNT(*) AS cnt
+                FROM leads
+                WHERE {field_name} IS NOT NULL AND {field_name} != ''
+                AND DATE(datatime) = DATE('now')
             """
-            if bayer:
-                query += " AND bayer = ?"
-                cursor.execute(query, (bayer,))
-            else:
-                cursor.execute(query)
+            params = []
+
+            if not is_admin:
+                query += " AND user_id = ?"
+                params.append(user_id_filter)
+
+            query += f" GROUP BY {field_name} ORDER BY cnt DESC LIMIT 1"
+
+            cursor.execute(query, params)
             result = cursor.fetchone()
             if result:
-                return (result[0], result[1])  # Возвращаем пару значений (ключ, количество)
-            return (None, 0)  # Если значения нет, возвращаем None и 0
+                return (result[0], result[1])
+            else:
+                return (None, 0)
 
-        # ✅ Получаем статистику по каждому полю
-        popular_values = {}
+        # 3. Какие поля мы реально можем смотреть
         fields = [
-            "kt_country", "funnel", "kt_campaign_name", "kt_landing_name", "kt_offer_name",
-            "kt_global_source", "kt_fb_ad_campaign_name", "kt_sub_id_5", "kt_sub_id_7"
+            "geo", "funnel", "campaign_name", "utm_source", "utm_medium", 
+            "source", "device_type", "gender", "kt_sub_id_5", "kt_sub_id_7"
         ]
 
+        popular_values = {}
         for field in fields:
-            if is_admin:
-                # Для администратора статистика по всем пользователям
-                popular_values[field] = get_popular_field_value(field)
-            else:
-                # Для обычного пользователя статистика только для его "bayer" (x_trackbox_username)
-                popular_values[field] = get_popular_field_value(field, x_trackbox_username)
+            popular_values[field] = get_popular_field_value(field, user_id)
 
-        # ✅ Преобразуем результат в нужный формат
+        # 4. Ответ в формате {поле: [значение, количество]}
         formatted_data = {field: [value[0], value[1]] for field, value in popular_values.items()}
 
-        # ✅ Возвращаем результат
         return jsonify({
             "success": True,
             "data": formatted_data
-        })
+        }), 200
 
     except Exception as e:
         return jsonify({
             "success": False,
-            "data": {
-                "message": f"Произошла ошибка: {str(e)}"
-            }
+            "data": {"message": f"Произошла ошибка: {str(e)}"}
         }), 500
 
 
@@ -1244,11 +1206,8 @@ def api_antidubl_get_general_statistics():
 
 
 
-
-
-
-@app.route('/api_antidubl_blacklist_add', methods=['POST'])
-def api_antidubl_add_to_blacklist():
+@app.route('/api_diktum_blacklist_add', methods=['POST'])
+def api_diktum_add_to_blacklist():
     """
     Ручка для добавления IP или email в блэклист вручную.
     """
@@ -1287,8 +1246,8 @@ def api_antidubl_add_to_blacklist():
         return jsonify({"success": False, "data": {"message": "Ошибка при добавлении в блэклист", "error": str(e)}}), 500
 
 
-@app.route('/api_antidubl_blacklist_remove', methods=['DELETE'])
-def api_antidubl_blacklist_remove():
+@app.route('/api_diktum_blacklist_remove', methods=['DELETE'])
+def api_diktum_blacklist_remove():
     """
     Ручка для удаления IP или email из блэклиста по id.
     """
@@ -1324,8 +1283,8 @@ def api_antidubl_blacklist_remove():
 
 
 
-@app.route('/api_antidubl_get_blacklist', methods=['GET'])
-def api_antidubl_get_blacklist():
+@app.route('/api_diktum_get_blacklist', methods=['GET'])
+def api_diktum_get_blacklist():
     """
     Ручка для получения списка заблокированных IP и email с возможностью фильтрации и пагинации.
     """
@@ -1465,48 +1424,42 @@ def api_antidubl_get_blacklist():
 
 # Список допустимых столбцов (для безопасности)
 VALID_COLUMNS = {
-    "funnel", "geo", "lg", "kt_campaign_group", "kt_landing_group", "kt_offer_group", "kt_landing_name",
-    "kt_offer_name", "kt_source_pixel", "kt_stream", "kt_global_source", "kt_referrer",
-    "kt_campaign_group_id", "kt_offer_group_id", "kt_landing_group_id",
-    "kt_landing_id", "kt_offer_id", "kt_fb_ad_campaign_name", "kt_external_id",
-    "kt_creative_id", "kt_connection_type", "kt_operator", "kt_isp", "kt_country", "kt_region", "kt_city",
-    "kt_language", "kt_device_type", "kt_os", "kt_os_version", "kt_browser",
-    "kt_browser_version", "kt_device_model", "kt_status", "kt_previous_status", "kt_original_status",
-    "kt_sale_period", "kt_profitability", "kt_revenue", "sale_status",
-    "kt_profit", "kt_sub_id_1", "kt_sub_id_5",
-    "kt_sub_id_6", "kt_sub_id_7", "kt_sub_id_8", "kt_sub_id_9", "kt_sub_id_11", "kt_sub_id_13",
-    "kt_sub_id_14", "kt_sub_id_16", "kt_sub_id_17", "kt_sub_id_18", "kt_sub_id_19", "kt_sub_id_23",
-    "kt_sub_id_25", "kt_sub_id_26", "kt_sub_id_27", "kt_sub_id_28", "kt_sub_id_29", "kt_sub_id_30"
-}
+    "funnel", "geo", "status", "gender", "age", "random",
+    "impression_weekday", "impression_hour", "user_timezone", "search_phrase",
+    "utm_source", "utm_medium", "source", "device_type", "position",
+    "advertiser_id", "campaign_id", "campaign_name", "banner_id"
+} | {f"kt_sub_id_{i}" for i in range(1, 11)}
 
-# Ручка для получения уникальных значений всех столбцов разом
-@app.route('/api_antidubl_get_all_unique_values', methods=['GET'])
+
+@app.route('/api_diktum_get_all_unique_values', methods=['GET'])
 def get_all_unique_values():
     try:
-        # Подключаемся к базе данных
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Собираем уникальные значения для всех столбцов
         result_data = {}
         for column in VALID_COLUMNS:
-            query = f"SELECT DISTINCT {column} FROM leads_daily WHERE {column} IS NOT NULL"
-            cursor.execute(query)
-            values = [row[column] for row in cursor.fetchall()]
-            result_data[column] = values
+            try:
+                query = f"SELECT DISTINCT {column} FROM leads WHERE {column} IS NOT NULL"
+                cursor.execute(query)
+                values = [row[0] for row in cursor.fetchall()]
+                result_data[column] = values
+            except sqlite3.OperationalError:
+                # Если вдруг колонка отсутствует, безопасно пропускаем
+                continue
 
-        # Закрываем соединение
         conn.close()
 
-        # Возвращаем результат
         return jsonify({
             "success": True,
             "data": result_data
         }), 200
 
     except sqlite3.Error as e:
-        return jsonify({"success": False, "data": {"message": f"Ошибка базы данных: {str(e)}"}}), 500
-
+        return jsonify({
+            "success": False,
+            "data": {"message": f"Ошибка базы данных: {str(e)}"}
+        }), 500
 
 
 

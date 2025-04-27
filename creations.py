@@ -164,9 +164,11 @@ def create_leads_table_if_not_exists(conn):
             CREATE TABLE IF NOT EXISTS leads (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                subid TEXT UNIQUE,
+                status INTEGER NOT NULL,
+                distributor_payout INTEGER DEFAULT 0,
+                subid TEXT NOT NULL,
                 datatime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                ip TEXT NOT NULL,
+                userip TEXT NOT NULL,
                 firstname TEXT NOT NULL,
                 lastname TEXT NOT NULL,
                 email TEXT NOT NULL,
@@ -208,7 +210,6 @@ def create_leads_table_if_not_exists(conn):
             if column not in existing_columns:
                 alter_query = f"ALTER TABLE leads ADD COLUMN {column} {data_type};"
                 conn.execute(alter_query)
-
 
 
 
@@ -263,29 +264,50 @@ def create_whatsapp_templates_table_if_not_exists(conn):
             )
         """)
 
-# def create_email_templates_table_if_not_exists(conn):
-#     with conn:
-#         conn.execute("""
-#             CREATE TABLE IF NOT EXISTS email_templates (
-#                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                 user_id INTEGER,
-#                 subject TEXT NOT NULL,
-#                 body TEXT NOT NULL
-#             );
-
-
-#         """)
-#         cursor = conn.cursor()
-#         # Проверяем наличие столбца 'created_by'
-#         cursor.execute("PRAGMA table_info(email_templates)")
-#         columns = [info[1] for info in cursor.fetchall()]
-#         if 'template_id' not in columns:
-#             # Добавляем столбец 'created_by' с дефолтным значением 'unknown'
-#             cursor.execute("ALTER TABLE email_templates ADD COLUMN template_id TEXT NOT NULL DEFAULT ''")
+def create_wa_api_logs_table_if_not_exists(conn):
+    with conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS wa_api_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_payload TEXT NOT NULL,
+                response_payload TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
 
 
 
+def create_email_templates_table_if_not_exists(conn):
+    with conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS email_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                template_name TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
 
+
+        """)
+
+
+
+def create_email_api_logs_table_if_not_exists(conn):
+    with conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS email_api_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                recipient_email TEXT NOT NULL,
+                template_name TEXT NOT NULL,
+                send_status TEXT NOT NULL CHECK (send_status IN ('success', 'failure')),
+                error_message TEXT,
+                transaction_id TEXT,
+                message_id TEXT,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+        """)
 
 
 
@@ -1227,85 +1249,3 @@ def create_cookies_for_bot_table_if_not_exists(conn):
 
 
 
-def create_whatsapp_api_logs_table_if_not_exists(conn):
-    with conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS WhatsAppApiLogs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_payload TEXT NOT NULL,
-                response_payload TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-
-def create_whatsapp_templates_table_if_not_exists(conn):
-    with conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS whatsapp_templates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                country_code TEXT,
-                language_code TEXT,
-                preferred_language_code TEXT,
-                template_name TEXT NOT NULL,
-                components TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                UNIQUE(user_id, country_code, preferred_language_code)
-            )
-        """)
-
-def create_email_templates_table_if_not_exists(conn):
-    with conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS email_templates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                country_code TEXT NOT NULL,
-                language_code TEXT NOT NULL,
-                subject TEXT NOT NULL,
-                body TEXT NOT NULL,
-                UNIQUE(country_code, language_code) -- Уникальность пары
-            );
-
-
-        """)
-        cursor = conn.cursor()
-        # Проверяем наличие столбца 'created_by'
-        cursor.execute("PRAGMA table_info(email_templates)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'template_id' not in columns:
-            # Добавляем столбец 'created_by' с дефолтным значением 'unknown'
-            cursor.execute("ALTER TABLE email_templates ADD COLUMN template_id TEXT NOT NULL DEFAULT ''")
-
-
-
-        
-
-
-def create_email_api_logs_table_if_not_exists(conn):
-    with conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS email_api_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                recipient_email TEXT NOT NULL,
-                subject TEXT,
-                body TEXT,
-                country_code VARCHAR(5),
-                language_code VARCHAR(5),
-                send_status VARCHAR(20) NOT NULL, -- 'success', 'failure'
-                error_message TEXT,              -- описание ошибки, если есть
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-        """)
-        cursor = conn.cursor()
-        # Проверяем наличие столбца 'created_by'
-        cursor.execute("PRAGMA table_info(email_api_logs)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'template_id' not in columns:
-            # Добавляем столбец 'created_by' с дефолтным значением 'unknown'
-            cursor.execute("ALTER TABLE email_api_logs ADD COLUMN template_id TEXT NOT NULL DEFAULT ''")

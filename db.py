@@ -1,9 +1,10 @@
 from imporst import *
 from keys_and_tokens import *
-from profit import *
+# from profit import *
 from creations import *
 from goals import *
 from dashboard import *
+from dashboard2 import *
 from users import *
 from notifications import *
 from leads import *
@@ -66,7 +67,9 @@ if __name__ == "__main__":
     create_blacklist_leads_table_if_not_exists(conn)     # Независимая
     create_api_antidubl_blackout_logs_table_if_not_exists(conn)  # Независимая
     create_whatsapp_templates_table_if_not_exists(conn)  # Зависит от users
-    # create_email_templates_table_if_not_exists(conn)     # Независимая (опционально зависит от users)
+    create_wa_api_logs_table_if_not_exists(conn)
+    create_email_templates_table_if_not_exists(conn)     # Независимая (опционально зависит от users)
+    create_email_api_logs_table_if_not_exists(conn)
     create_goals_table_if_not_exists(conn) 
 
     conn.close()
