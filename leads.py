@@ -1063,40 +1063,45 @@ def api_diktum_get_leads():
             end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y-%m-%d 23:59:59")
 
         # 6. Формирование SQL-запроса
-        query = f"SELECT {', '.join(all_columns)} FROM leads"
+        query = f"""
+            SELECT leads.*, users.login AS username
+            FROM leads
+            JOIN users ON leads.user_id = users.user_id
+        """
         params = []
         where_clauses = []
 
         if not is_admin:
-            where_clauses.append("user_id = ?")
+            where_clauses.append("leads.user_id = ?")
             params.append(user_id)
 
         for column, value in request_params.items():
             if value and column in filterable_columns:
-                where_clauses.append(f"{column} = ?")
+                where_clauses.append(f"leads.{column} = ?")
                 params.append(value)
 
         if start_date:
-            where_clauses.append("datatime >= ?")
+            where_clauses.append("leads.datatime >= ?")
             params.append(start_date)
         if end_date:
-            where_clauses.append("datatime <= ?")
+            where_clauses.append("leads.datatime <= ?")
             params.append(end_date)
 
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
 
-        query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY leads.id DESC LIMIT ? OFFSET ?"
         params.extend([validated_data["limit"], (validated_data["page"] - 1) * validated_data["limit"]])
 
         cursor.execute(query, params)
         leads = cursor.fetchall()
 
-        leads_list = [dict(zip(all_columns, lead)) for lead in leads]
+        # Теперь username есть в каждом результате
+        leads_list = [dict(lead) for lead in leads]
 
-        # Подсчёт общего количества
+        # Подсчёт общего количества (оставляем как есть)
         count_query = "SELECT COUNT(*) FROM leads"
-        count_params = params[:-2]  # без limit и offset
+        count_params = params[:-2]
         if where_clauses:
             count_query += " WHERE " + " AND ".join(where_clauses)
 

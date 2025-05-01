@@ -9,7 +9,7 @@ CORS(app, supports_credentials=True)
 
 # Настройка для Flask-APScheduler
 app.config['SCHEDULER_API_ENABLED'] = True
-app.config['SCHEDULER_TIMEZONE'] = 'Asia/Novosibirsk '
+app.config['SCHEDULER_TIMEZONE'] = 'Asia/Novosibirsk'
 
 
 scheduler = APScheduler()
