@@ -436,10 +436,8 @@ def set_company_info():
     if not v.validate(data):
         return jsonify({
             "success": False,
-            "data": {
-                "message": "Ошибка валидации",
-                "details": v.errors
-            }
+            "message": "Ошибка валидации входных данных",
+            "details": v.errors
         }), 400
 
     username = data['username']
@@ -452,7 +450,10 @@ def set_company_info():
 
     if not user:
         conn.close()
-        return jsonify({"success": False, "message": f"Пользователь с username '{username}' не найден"}), 404
+        return jsonify({
+            "success": False,
+            "message": f"Пользователь с username '{username}' не найден"
+        }), 404
 
     user_id = user['user_id']
 
@@ -482,7 +483,11 @@ def set_company_info():
     conn.commit()
     conn.close()
 
-    return jsonify({"success": True, "message": "Информация о компании успешно сохранена"}), 200
+    return jsonify({
+        "success": True,
+        "message": "Информация о компании успешно сохранена"
+    }), 200
+
 
 
 
@@ -495,11 +500,18 @@ def upload_company_logo():
     v = Validator(upload_schema)
     data = {'file': request.files.get('file')}
     if not v.validate(data):
-        return jsonify({"success": False, "message": "Ошибка валидации", "details": v.errors}), 400
+        return jsonify({
+            "success": False,
+            "message": "Ошибка валидации файла",
+            "details": v.errors
+        }), 400
 
     username = request.form.get('username')
     if not username:
-        return jsonify({"success": False, "message": "Не передан username"}), 400
+        return jsonify({
+            "success": False,
+            "message": "Не передан username"
+        }), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -507,19 +519,24 @@ def upload_company_logo():
     user = cursor.fetchone()
 
     if not user:
-        return jsonify({"success": False, "message": "Пользователь не найден"}), 404
+        return jsonify({
+            "success": False,
+            "message": "Пользователь не найден"
+        }), 404
 
     user_id = user["user_id"]
     file = data['file']
 
     if file.filename == '':
-        return jsonify({"success": False, "message": "Файл не выбран"}), 400
+        return jsonify({
+            "success": False,
+            "message": "Файл не выбран"
+        }), 400
 
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         folder = app.config.get('UPLOAD_COMPANY_LOGOS_FOLDER', 'static/company_logos')
-        if not os.path.exists(folder):
-            os.makedirs(folder)
+        os.makedirs(folder, exist_ok=True)
         filepath = os.path.join(folder, filename)
         file.save(filepath)
         image_path = os.path.join('/static/company_logos/', filename)
@@ -536,7 +553,11 @@ def upload_company_logo():
             "image_path": image_path
         }), 201
     else:
-        return jsonify({"success": False, "message": "Недопустимый тип файла"}), 400
+        return jsonify({
+            "success": False,
+            "message": "Недопустимый тип файла"
+        }), 400
+
 
 
 
@@ -548,29 +569,42 @@ def get_company_info():
     username = request.args.get('username')
 
     if not username:
-        return jsonify({"success": False, "message": "Параметр 'username' обязателен"}), 400
+        return jsonify({
+            "success": False,
+            "message": "Параметр 'username' обязателен"
+        }), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Получаем user_id по username
     cursor.execute("SELECT user_id FROM users WHERE login = ?", (username,))
     user = cursor.fetchone()
     if not user:
-        return jsonify({"success": False, "message": "Пользователь не найден"}), 404
+        conn.close()
+        return jsonify({
+            "success": False,
+            "message": "Пользователь не найден"
+        }), 404
 
     user_id = user['user_id']
 
-    # Получаем данные компании
     cursor.execute("SELECT * FROM companies_info WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     conn.close()
 
     if not row:
-        return jsonify({"success": False, "message": "Информация о компании не найдена"}), 404
+        return jsonify({
+            "success": False,
+            "message": "Информация о компании не найдена"
+        }), 404
 
     company_info = {key: row[key] for key in row.keys()}
-    return jsonify({"success": True, "data": company_info}), 200
+    return jsonify({
+        "success": True,
+        "message": "Информация о компании успешно получена",
+        "data": company_info
+    }), 200
+
 
 
 
