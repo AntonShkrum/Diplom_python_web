@@ -415,6 +415,176 @@ def logout():
 
 
 
+set_company_info_schema = {
+    'username': {'type': 'string', 'required': True, 'empty': False},
+    'company_name': {'type': 'string', 'required': True, 'empty': False},
+    'contract_start_date': {'type': 'string', 'required': True, 'empty': False, 'regex': r'^\d{2}\.\d{2}\.\d{4}$'},
+    'description': {'type': 'string', 'required': False, 'nullable': True},
+    'website': {'type': 'string', 'required': False, 'nullable': True},
+    'email': {'type': 'string', 'required': False, 'nullable': True},
+    'phone': {'type': 'string', 'required': False, 'nullable': True},
+    'address': {'type': 'string', 'required': False, 'nullable': True}
+}
+
+@app.route('/company_set_info', methods=['POST'])
+def set_company_info():
+    from cerberus import Validator
+
+    data = request.get_json()
+    v = Validator(set_company_info_schema)
+
+    if not v.validate(data):
+        return jsonify({
+            "success": False,
+            "data": {
+                "message": "Ошибка валидации",
+                "details": v.errors
+            }
+        }), 400
+
+    username = data['username']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT user_id FROM users WHERE login = ?", (username,))
+    user = cursor.fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"success": False, "message": f"Пользователь с username '{username}' не найден"}), 404
+
+    user_id = user['user_id']
+
+    cursor.execute("""
+        INSERT INTO companies_info (
+            user_id, company_name, description, website, email, phone, address, contract_start_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            company_name=excluded.company_name,
+            description=excluded.description,
+            website=excluded.website,
+            email=excluded.email,
+            phone=excluded.phone,
+            address=excluded.address,
+            contract_start_date=excluded.contract_start_date
+    """, (
+        user_id,
+        data.get('company_name'),
+        data.get('description'),
+        data.get('website'),
+        data.get('email'),
+        data.get('phone'),
+        data.get('address'),
+        data.get('contract_start_date')
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True, "message": "Информация о компании успешно сохранена"}), 200
+
+
+
+upload_schema = {
+    'file': {'type': 'dict', 'required': True}
+}
+
+@app.route('/company_info_upload_logo', methods=['POST'])
+def upload_company_logo():
+    v = Validator(upload_schema)
+    data = {'file': request.files.get('file')}
+    if not v.validate(data):
+        return jsonify({"success": False, "message": "Ошибка валидации", "details": v.errors}), 400
+
+    username = request.form.get('username')
+    if not username:
+        return jsonify({"success": False, "message": "Не передан username"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM users WHERE login = ?", (username,))
+    user = cursor.fetchone()
+
+    if not user:
+        return jsonify({"success": False, "message": "Пользователь не найден"}), 404
+
+    user_id = user["user_id"]
+    file = data['file']
+
+    if file.filename == '':
+        return jsonify({"success": False, "message": "Файл не выбран"}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        folder = app.config.get('UPLOAD_COMPANY_LOGOS_FOLDER', 'static/company_logos')
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        filepath = os.path.join(folder, filename)
+        file.save(filepath)
+        image_path = os.path.join('/static/company_logos/', filename)
+
+        with conn:
+            conn.execute("""
+                UPDATE companies_info SET image_path = ? WHERE user_id = ?
+            """, (image_path, user_id))
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": "Логотип успешно загружен",
+            "image_path": image_path
+        }), 201
+    else:
+        return jsonify({"success": False, "message": "Недопустимый тип файла"}), 400
+
+
+
+
+
+
+@app.route('/company_get_info', methods=['GET'])
+def get_company_info():
+    username = request.args.get('username')
+
+    if not username:
+        return jsonify({"success": False, "message": "Параметр 'username' обязателен"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Получаем user_id по username
+    cursor.execute("SELECT user_id FROM users WHERE login = ?", (username,))
+    user = cursor.fetchone()
+    if not user:
+        return jsonify({"success": False, "message": "Пользователь не найден"}), 404
+
+    user_id = user['user_id']
+
+    # Получаем данные компании
+    cursor.execute("SELECT * FROM companies_info WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"success": False, "message": "Информация о компании не найдена"}), 404
+
+    company_info = {key: row[key] for key in row.keys()}
+    return jsonify({"success": True, "data": company_info}), 200
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

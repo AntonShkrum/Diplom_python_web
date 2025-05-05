@@ -316,6 +316,26 @@ def create_email_api_logs_table_if_not_exists(conn):
 
 
 
+def create_companies_info_table_if_not_exists(conn):
+    with conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS companies_info (
+                user_id INTEGER PRIMARY KEY,  -- внешний и первичный ключ
+                company_name TEXT NOT NULL,
+                description TEXT,
+                website TEXT,
+                email TEXT,
+                phone TEXT,
+                address TEXT,
+                image_path TEXT,             -- путь к изображению (например, логотипу)
+                contract_start_date DATE,    -- дата начала договора
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+        """)
+
+        # Индексы (при необходимости)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_company_name ON companies_info(company_name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_company_website ON companies_info(website)")
 
 
 

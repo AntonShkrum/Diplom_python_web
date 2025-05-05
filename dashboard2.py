@@ -13,7 +13,6 @@ def api_dashboard_leads_chart_by_days():
     """
     Эндпоинт для получения расширенной статистики лидов по дням.
     """
-    from cerberus import Validator
 
     try:
         conn = get_db_connection()
@@ -138,7 +137,6 @@ def api_dashboard_sales_piechart_admin():
     """
     Эндпоинт для администраторов: статистика по пользователям.
     """
-    from cerberus import Validator
 
     try:
         conn = get_db_connection()
@@ -246,7 +244,6 @@ def api_dashboard_status_piechart_user():
     """
     Эндпоинт для пользователей: распределение лидов по статусам.
     """
-    from cerberus import Validator
 
     try:
         conn = get_db_connection()

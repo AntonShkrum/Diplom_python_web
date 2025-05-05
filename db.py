@@ -71,7 +71,8 @@ if __name__ == "__main__":
     create_email_templates_table_if_not_exists(conn)     # Независимая (опционально зависит от users)
     create_email_api_logs_table_if_not_exists(conn)
     create_goals_table_if_not_exists(conn) 
-
+    create_companies_info_table_if_not_exists(conn) 
+    
     conn.close()
 
 
