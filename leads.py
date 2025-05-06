@@ -343,7 +343,7 @@ def save_email_template():
     try:
         # Проверка: есть ли уже запись для этого user_id
         cursor.execute('''
-            SELECT id FROM email_templates WHERE user_id = ?
+            SELECT user_id FROM email_templates WHERE user_id = ?
         ''', (user_id,))
         existing = cursor.fetchone()
 
@@ -400,7 +400,6 @@ def get_email_template():
             return jsonify({"error": "Шаблон для пользователя не найден"}), 404
 
         template_data = {
-            "id": template["id"],
             "user_id": template["user_id"],
             "template_name": template["template_name"]
         }
@@ -417,26 +416,38 @@ def get_email_template():
 
 
 
-@app.route('/api_diktum_email_delete_body/<int:template_id>', methods=['DELETE'])
-def delete_email_template(template_id):
+@app.route('/api_diktum_email_delete_body', methods=['DELETE'])
+def delete_email_template():
+    from flask import request
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({"success": False, "message": "Отсутствует токен авторизации"}), 401
+
+    try:
+        token = token.split(' ')[-1]
+        payload = verify_jwt(token)
+        user_id = payload['user_id']
+    except Exception:
+        return jsonify({"success": False, "message": "Недействительный или истекший токен"}), 401
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Проверяем наличие шаблона
-        cursor.execute('SELECT id FROM email_templates WHERE id = ?', (template_id,))
+        # Проверяем наличие шаблона у пользователя
+        cursor.execute('SELECT user_id FROM email_templates WHERE user_id = ?', (user_id,))
         template = cursor.fetchone()
 
         if not template:
-            return jsonify({"error": "Шаблон не найден"}), 404
+            return jsonify({"success": False, "message": "Шаблон для данного пользователя не найден"}), 404
 
-        # Удаляем шаблон
-        cursor.execute('DELETE FROM email_templates WHERE id = ?', (template_id,))
+        # Удаляем шаблон пользователя
+        cursor.execute('DELETE FROM email_templates WHERE user_id = ?', (user_id,))
         conn.commit()
 
         return jsonify({
             "success": True,
-            "message": f"Шаблон с id {template_id} успешно удалён"
+            "message": f"Шаблон пользователя user_id={user_id} успешно удалён"
         }), 200
 
     except sqlite3.Error as e:
@@ -447,6 +458,7 @@ def delete_email_template(template_id):
 
     finally:
         conn.close()
+
 
 
 

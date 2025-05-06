@@ -70,7 +70,7 @@ def verify_token():
     if request.path.startswith('/static/') or request.method == 'OPTIONS':
         return
 
-    if request.endpoint not in ('test', 'index', 'refresh_token', 'api_diktum'):
+    if request.endpoint not in ('test', 'index', 'refresh_token', 'api_diktum', 'export_leads_report', 'generate_agent_report'):
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({"error": "Access token is missing"}), 401

@@ -8,7 +8,7 @@ from dashboard2 import *
 from users import *
 from notifications import *
 from leads import *
-
+from reports import *
 
 
 
@@ -59,8 +59,6 @@ if __name__ == "__main__":
     create_notifications_table_if_not_exists(conn)  # Таблица notifications
 
     # Затем создаем таблицы с зависимостями
-    create_avatars_table_if_not_exists(conn) 
-    create_employers_table_if_not_exists(conn)      # Зависит от users
     create_role_pages_table_if_not_exists(conn)     # Зависит от roles и pages
     create_notification_users_table_if_not_exists(conn)  # Зависит от notifications и users
     create_leads_table_if_not_exists(conn)          # Зависит от users
@@ -71,7 +69,7 @@ if __name__ == "__main__":
     create_email_templates_table_if_not_exists(conn)     # Независимая (опционально зависит от users)
     create_email_api_logs_table_if_not_exists(conn)
     create_goals_table_if_not_exists(conn) 
-    create_companies_info_table_if_not_exists(conn) 
+    create_distributors_info_table_if_not_exists(conn) 
     
     conn.close()
 

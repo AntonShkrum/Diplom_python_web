@@ -148,7 +148,7 @@ def get_user_info():
 
     # Получаем путь к аватару пользователя
     cursor.execute("""
-        SELECT avatar_path FROM avatars WHERE user_id = ?
+        SELECT avatar_path FROM users WHERE user_id = ?
     """, (user_id,))
 
     avatar = cursor.fetchone()
@@ -249,14 +249,13 @@ def upload_avatar():
         conn = get_db_connection()
         try:
             file.save(filepath)
-            create_avatars_table_if_not_exists(conn)
             avatar_path = os.path.join('/static/avatars/', filename)
 
             with conn:
                 conn.execute("""
-                    INSERT OR REPLACE INTO avatars (user_id, avatar_path)
-                    VALUES (?, ?)
-                """, (user_id, avatar_path))
+                    UPDATE users SET avatar_path = ? WHERE user_id = ?
+                """, (avatar_path, user_id))
+
 
             return jsonify({
                 "success": True,
@@ -418,13 +417,28 @@ def logout():
 set_company_info_schema = {
     'username': {'type': 'string', 'required': True, 'empty': False},
     'company_name': {'type': 'string', 'required': True, 'empty': False},
-    'contract_start_date': {'type': 'string', 'required': True, 'empty': False, 'regex': r'^\d{2}\.\d{2}\.\d{4}$'},
+    'contract_start_date': {
+        'type': 'string',
+        'required': False,
+        'nullable': True,
+        'regex': r'^\d{2}\.\d{2}\.\d{4}$'
+    },
     'description': {'type': 'string', 'required': False, 'nullable': True},
     'website': {'type': 'string', 'required': False, 'nullable': True},
     'email': {'type': 'string', 'required': False, 'nullable': True},
     'phone': {'type': 'string', 'required': False, 'nullable': True},
-    'address': {'type': 'string', 'required': False, 'nullable': True}
+    'address': {'type': 'string', 'required': False, 'nullable': True},
+
+    # Новые поля
+    'ogrn': {'type': 'string', 'required': False, 'nullable': True},
+    'inn': {'type': 'string', 'required': False, 'nullable': True},
+    'kpp': {'type': 'string', 'required': False, 'nullable': True},
+    'bank_account': {'type': 'string', 'required': False, 'nullable': True},
+    'bank_name': {'type': 'string', 'required': False, 'nullable': True},
+    'correspondent_account': {'type': 'string', 'required': False, 'nullable': True},
+    'bik': {'type': 'string', 'required': False, 'nullable': True}
 }
+
 
 @app.route('/company_set_info', methods=['POST'])
 def set_company_info():
@@ -439,6 +453,15 @@ def set_company_info():
             "message": "Ошибка валидации входных данных",
             "details": v.errors
         }), 400
+    
+    contract_start_date_raw = data.get('contract_start_date')
+    if contract_start_date_raw:
+        try:
+            contract_start_date = datetime.strptime(contract_start_date_raw, "%d.%m.%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            return jsonify({"success": False, "message": "Некорректный формат даты"}), 400
+    else:
+        contract_start_date = None
 
     username = data['username']
 
@@ -457,10 +480,17 @@ def set_company_info():
 
     user_id = user['user_id']
 
+    # Преобразуем дату в формат ISO
+    try:
+        contract_start_date = datetime.strptime(data['contract_start_date'], "%d.%m.%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return jsonify({"success": False, "message": "Некорректный формат даты"}), 400
+
     cursor.execute("""
-        INSERT INTO companies_info (
-            user_id, company_name, description, website, email, phone, address, contract_start_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO distributors_info (
+            user_id, company_name, description, website, email, phone, address, contract_start_date,
+            ogrn, inn, kpp, bank_account, bank_name, correspondent_account, bik
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
             company_name=excluded.company_name,
             description=excluded.description,
@@ -468,7 +498,14 @@ def set_company_info():
             email=excluded.email,
             phone=excluded.phone,
             address=excluded.address,
-            contract_start_date=excluded.contract_start_date
+            contract_start_date=excluded.contract_start_date,
+            ogrn=excluded.ogrn,
+            inn=excluded.inn,
+            kpp=excluded.kpp,
+            bank_account=excluded.bank_account,
+            bank_name=excluded.bank_name,
+            correspondent_account=excluded.correspondent_account,
+            bik=excluded.bik
     """, (
         user_id,
         data.get('company_name'),
@@ -477,7 +514,14 @@ def set_company_info():
         data.get('email'),
         data.get('phone'),
         data.get('address'),
-        data.get('contract_start_date')
+        contract_start_date,
+        data.get('ogrn'),
+        data.get('inn'),
+        data.get('kpp'),
+        data.get('bank_account'),
+        data.get('bank_name'),
+        data.get('correspondent_account'),
+        data.get('bik')
     ))
 
     conn.commit()
@@ -491,8 +535,9 @@ def set_company_info():
 
 
 
+
 upload_schema = {
-    'file': {'type': 'dict', 'required': True}
+    'file': {'required': True}
 }
 
 @app.route('/company_info_upload_logo', methods=['POST'])
@@ -543,7 +588,7 @@ def upload_company_logo():
 
         with conn:
             conn.execute("""
-                UPDATE companies_info SET image_path = ? WHERE user_id = ?
+                UPDATE distributors_info SET image_path = ? WHERE user_id = ?
             """, (image_path, user_id))
         conn.close()
 
@@ -563,7 +608,6 @@ def upload_company_logo():
 
 
 
-
 @app.route('/company_get_info', methods=['GET'])
 def get_company_info():
     username = request.args.get('username')
@@ -577,6 +621,7 @@ def get_company_info():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Получаем user_id по username
     cursor.execute("SELECT user_id FROM users WHERE login = ?", (username,))
     user = cursor.fetchone()
     if not user:
@@ -588,7 +633,8 @@ def get_company_info():
 
     user_id = user['user_id']
 
-    cursor.execute("SELECT * FROM companies_info WHERE user_id = ?", (user_id,))
+    # Получаем все поля из distributors_info
+    cursor.execute("SELECT * FROM distributors_info WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     conn.close()
 
@@ -599,11 +645,13 @@ def get_company_info():
         }), 404
 
     company_info = {key: row[key] for key in row.keys()}
+
     return jsonify({
         "success": True,
         "message": "Информация о компании успешно получена",
         "data": company_info
     }), 200
+
 
 
 

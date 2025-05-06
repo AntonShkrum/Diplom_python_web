@@ -31,3 +31,12 @@ import ssl
 from requests.exceptions import SSLError
 import smtplib
 from email.mime.text import MIMEText
+from flask import send_file
+import pandas as pd
+from io import BytesIO
+
+
+from flask import send_file, request, jsonify
+from docx import Document
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
