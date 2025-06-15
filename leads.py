@@ -500,16 +500,14 @@ def send_whatsapp_template(user_id, phone):
             "template": {
                 "name": template_name,
                 "language": {
-                    "code": "en_US"  # Можно доработать, если нужно динамически
+                    "code": "ru"  # Можно доработать, если нужно динамически
                 }
             }
         }
-
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {ACCESS_TOKEN}'
         }
-
         # Отправляем POST-запрос в WhatsApp API
         response = requests.post(
             f'https://graph.facebook.com/v17.0/{WHATSAPP_BUSINESS_PHONE_NUMBER_ID}/messages',
@@ -1122,7 +1120,7 @@ def api_diktum_get_leads():
         total_pages = (total_count // validated_data["limit"]) + (1 if total_count % validated_data["limit"] > 0 else 0)
 
         conn.close()
-
+        
         return jsonify({
             "success": True,
             "data": leads_list,

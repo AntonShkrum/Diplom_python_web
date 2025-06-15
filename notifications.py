@@ -41,11 +41,8 @@ def create_notification_endpoint():
 def create_notification(text, user_ids, url=None):
     # Подключаемся к БД
     conn = get_db_connection()
-
     cursor = conn.cursor()
-
     now = datetime.now()
-
     date = now.strftime('%d.%m.%Y')  # Дата в формате 'dd.mm.YYYY'
     time = now.strftime('%H:%M')     # Время в формате 'HH:MM'
 

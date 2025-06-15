@@ -40,3 +40,4 @@ from flask import send_file, request, jsonify
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from urllib.parse import unquote

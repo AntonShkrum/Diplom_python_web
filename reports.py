@@ -2,12 +2,17 @@ from imporst import *
 from creations import *
 from keys_and_tokens import *
 
+from flask import send_file, request, jsonify
+from io import BytesIO
+from datetime import datetime
+import pandas as pd
+import sqlite3
+import os
+
 @app.route('/generate_leads_report', methods=['GET'])
 def export_leads_report():
     try:
-
         role = 'admin'
-
         if role != 'admin':
             return jsonify({"success": False, "message": "Требуются права администратора"}), 403
 
@@ -74,12 +79,46 @@ def export_leads_report():
 
         cursor.execute(query, params)
         leads = cursor.fetchall()
-
         columns = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(leads, columns=columns)
 
         if df.empty:
             return jsonify({"success": False, "message": "Нет данных для экспорта"}), 404
+
+        # Русские названия колонок
+        rename_columns = {
+            'id': 'ID',
+            'user_id': 'ID пользователя',
+            'username': 'Имя пользователя',
+            'status': 'Статус',
+            'distributor_payout': 'Выплата дистрибьютору',
+            'subid': 'SubID',
+            'datatime': 'Дата и время',
+            'userip': 'IP пользователя',
+            'firstname': 'Имя',
+            'lastname': 'Фамилия',
+            'email': 'Email',
+            'phone': 'Телефон',
+            'funnel': 'Воронка',
+            'advertiser_id': 'ID рекламодателя',
+            'campaign_id': 'ID кампании',
+            'campaign_name': 'Название кампании',
+            'banner_id': 'ID баннера',
+            'city_id': 'Регион',
+            'gender': 'Пол',
+            'age': 'Возраст',
+            'random': 'Случайное число',
+            'day_of_week': 'День недели',
+            'hour': 'Час',
+            'timezone': 'Часовой пояс',
+            'keyword': 'Поисковая фраза',
+            'utm_source': 'Источник трафика',
+            'utm_medium': 'Тип трафика',
+            'utm_campaign': 'UTM-кампания',
+            'device': 'Тип устройства',
+            'position': 'Позиция объявления'
+        }
+        df.rename(columns=rename_columns, inplace=True)
 
         params_df = pd.DataFrame([{
             "Параметр": "Период",
@@ -90,8 +129,8 @@ def export_leads_report():
         }])
 
         total_leads = len(df)
-        total_sales = len(df[df['status'] == 'sale'])
-        total_payout = df[df['status'] == 'sale']['distributor_payout'].sum()
+        total_sales = len(df[df['Статус'] == 'sale'])
+        total_payout = df[df['Статус'] == 'sale']['Выплата дистрибьютору'].sum()
         summary_df = pd.DataFrame([{
             "Всего лидов": total_leads,
             "Всего продаж": total_sales,
@@ -126,15 +165,19 @@ def export_leads_report():
 @app.route('/generate_agent_report', methods=['GET'])
 def generate_agent_report():
     try:
-        username = request.args.get('username')
-        start_date = request.args.get('start_date')  # формат: YYYY-MM-DD
-        end_date = request.args.get('end_date')      # формат: YYYY-MM-DD
+        username = request.args.get("username")
+        start_date_str = request.args.get('start_date')  # формат: ДД.ММ.ГГГГ
+        end_date_str = request.args.get('end_date')
 
-        if not username or not start_date or not end_date:
+        if not username or not start_date_str or not end_date_str:
             return jsonify({
                 "success": False,
                 "message": "Параметры 'username', 'start_date', 'end_date' обязательны"
             }), 400
+
+        # Преобразуем строки в datetime
+        start_date_obj = datetime.strptime(start_date_str, "%d.%m.%Y")
+        end_date_obj = datetime.strptime(end_date_str, "%d.%m.%Y")
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -147,7 +190,7 @@ def generate_agent_report():
         user_id = user["user_id"]
 
         # Получаем данные компании
-        cursor.execute("SELECT * FROM companies_info WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT * FROM distributors_info WHERE user_id = ?", (user_id,))
         company = cursor.fetchone()
         if not company:
             return jsonify({"success": False, "message": "Информация о компании не найдена"}), 404
@@ -159,7 +202,11 @@ def generate_agent_report():
                    SUM(CASE WHEN status = 'sale' THEN distributor_payout ELSE 0 END) as total_payout
             FROM leads
             WHERE user_id = ? AND datatime BETWEEN ? AND ?
-        """, (user_id, start_date + " 00:00:00", end_date + " 23:59:59"))
+        """, (
+            user_id,
+            start_date_obj.strftime('%Y-%m-%d 00:00:00'),
+            end_date_obj.strftime('%Y-%m-%d 23:59:59')
+        ))
         stats = cursor.fetchone()
 
         total_leads = stats['total_leads'] or 0
@@ -172,20 +219,14 @@ def generate_agent_report():
         doc = Document()
 
         # Заголовок справа
-        p = doc.add_paragraph("Приложение № _____")
-        p.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
-        run = p.runs[0]
-        run.font.size = Pt(12)
-
-        p = doc.add_paragraph("к агентскому договору на реализацию товара")
-        p.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
-        run = p.runs[0]
-        run.font.size = Pt(12)
-
-        p = doc.add_paragraph(f"№ _____ от __.__.20__ г.")
-        p.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
-        run = p.runs[0]
-        run.font.size = Pt(12)
+        for text in [
+            "Приложение № _____",
+            "к агентскому договору на реализацию товара",
+            f"№ _____ от __.__.20__ г."
+        ]:
+            p = doc.add_paragraph(text)
+            p.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
+            p.runs[0].font.size = Pt(12)
 
         doc.add_paragraph()
 
@@ -194,10 +235,9 @@ def generate_agent_report():
         title.runs[0].bold = True
 
         doc.add_paragraph(f"г. {today.year}")
-
         doc.add_paragraph(f"Агент: {company['company_name']}")
         doc.add_paragraph(f"Агентский договор на реализацию товара № _____ от __.__.20__ г.")
-        doc.add_paragraph(f"Отчетный период: {datetime.strptime(start_date, '%Y-%m-%d').strftime('%m.%Y')} (месяц, год)")
+        doc.add_paragraph(f"Отчетный период: {start_date_obj.strftime('%m.%Y')} (месяц, год)")
 
         doc.add_paragraph("1. За отчетный период Агентом совершены следующие фактические действия:")
 
@@ -209,27 +249,27 @@ def generate_agent_report():
 
         row_cells = table.add_row().cells
         row_cells[0].text = f"Передано заявок: {total_leads}"
-        row_cells[1].text = f"{datetime.strptime(start_date, '%Y-%m-%d').strftime('%d.%m.%Y')} — {datetime.strptime(end_date, '%Y-%m-%d').strftime('%d.%m.%Y')}"
+        row_cells[1].text = f"{start_date_obj.strftime('%d.%m.%Y')} — {end_date_obj.strftime('%d.%m.%Y')}"
 
-        doc.add_paragraph(f"")
-
+        doc.add_paragraph("")
         doc.add_paragraph(
             f"2. За отчетный период Агентом были предоставлены {total_leads} заявок в период с "
-            f"{datetime.strptime(start_date, '%Y-%m-%d').strftime('%d.%m.%Y')} по "
-            f"{datetime.strptime(end_date, '%Y-%m-%d').strftime('%d.%m.%Y')}, из них {total_sales} продаж (и), "
-            f"по которым агенту полагается выплата в размере {round(total_payout, 2)} ₽."
+            f"{start_date_obj.strftime('%d.%m.%Y')} по {end_date_obj.strftime('%d.%m.%Y')}, "
+            f"из них {total_sales} продаж(и), по которым агенту полагается выплата в размере "
+            f"{round(total_payout, 2)} ₽."
         )
 
-        # Отправка файла
         output = BytesIO()
         doc.save(output)
         output.seek(0)
 
-        filename = f"agent_report_{username}_{datetime.now().strftime('%Y%m%d')}.docx"
-        return send_file(output,
-                         as_attachment=True,
-                         download_name=filename,
-                         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        filename = f"agent_report_{username}_{today.strftime('%Y%m%d')}.docx"
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
 
     except Exception as e:
         return jsonify({"success": False, "message": f"Ошибка генерации отчета: {str(e)}"}), 500
